@@ -34,4 +34,3 @@ exec setpriv \
   --init-groups \
   --no-new-privs \
   "$@"
-

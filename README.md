@@ -9,6 +9,7 @@ Codex development on a local or Remote SSH Docker host.
 - Pinned Node and Codex CLI installation independent of the base image
 - NVIDIA GPU selection with Docker and `CUDA_VISIBLE_DEVICES`
 - Persistent Codex, Hugging Face, Torch, uv, and virtual-environment volumes
+- Host-visible dataset, model, output, and experiment-run mounts
 - Non-root development with host/container UID alignment
 - Project-scoped Codex configuration and safety rules
 - Repository-local Git hooks
@@ -110,7 +111,7 @@ hf auth login  # after adding a project dependency that provides the hf CLI
 
 Codex state persists in a named volume mounted at `/home/vscode/.codex`.
 Repository policy remains in `/workspace/.codex`. Hugging Face data persists
-under `HF_HOME` in a separate volume.
+under `HF_HOME` in a private named volume.
 
 Never put tokens in the Dockerfile, build arguments, `devcontainer.json`, Git,
 or a committed environment file.
@@ -163,6 +164,31 @@ backed-up host or object-storage location.
 
 Do not remove Docker volumes or run broad Docker cleanup commands without
 reviewing which projects and caches they affect.
+
+### Mounted ML storage
+
+Before container creation, `initializeCommand` creates this layout on the
+Docker host:
+
+```text
+~/ml-storage/
+├── datasets/
+├── models/
+├── outputs/
+└── runs/
+```
+
+All four directories are writable bind mounts so downloads and training
+artifacts remain visible outside the container. They are available inside as
+`DATASETS_DIR`, `MODELS_DIR`, `OUTPUTS_DIR`, and `RUNS_DIR`. They are independent
+of the Hugging Face cache, which remains in its existing named volume under
+`/home/vscode/.cache/huggingface`.
+
+The directories are created as the local or Remote SSH user, and
+`updateRemoteUserUID` aligns the container user with that host ownership. Do
+not add these external bind mounts to the entrypoint's `chown` loop. On a
+multi-user host, replace this single-user layout with administrator-managed
+group permissions and add the shared numeric GID through Docker.
 
 ### Agent worktrees
 

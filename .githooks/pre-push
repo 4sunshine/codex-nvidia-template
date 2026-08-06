@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+remote_name="${1:-origin}"
+
 deny() {
   echo "pre-push: blocked: $*" >&2
   exit 1
@@ -17,11 +19,6 @@ while IFS=' ' read -r local_ref local_sha remote_ref remote_sha extra; do
     deny "remote branch deletion is not permitted."
   fi
 
-  if [[ ! "${remote_sha}" =~ ^0+$ ]] \
-      && ! git merge-base --is-ancestor "${remote_sha}" "${local_sha}"; then
-    deny "non-fast-forward updates are not permitted."
-  fi
-
   case "${remote_ref}" in
     refs/heads/main|refs/heads/master)
       if [[ ! "${remote_sha}" =~ ^0+$ ]]; then
@@ -29,8 +26,17 @@ while IFS=' ' read -r local_ref local_sha remote_ref remote_sha extra; do
       fi
       ;;
   esac
+
+  if [[ ! "${remote_sha}" =~ ^0+$ ]]; then
+    branch="${remote_ref#refs/heads/}"
+    if ! git cat-file -e "${remote_sha}^{commit}" 2>/dev/null; then
+      deny "remote commit ${remote_sha} is not available locally; run 'git fetch ${remote_name} ${branch}' and retry."
+    fi
+    if ! git merge-base --is-ancestor "${remote_sha}" "${local_sha}"; then
+      deny "non-fast-forward updates are not permitted."
+    fi
+  fi
 done
 
 uv run python -m compileall -q src
 uv run python -m unittest discover -s tests
-
