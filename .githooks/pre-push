@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+deny() {
+  echo "pre-push: blocked: $*" >&2
+  exit 1
+}
+
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha extra; do
+  [[ -n "${local_ref:-}" ]] || continue
+
+  if [[ -n "${extra:-}" || -z "${local_sha:-}" || -z "${remote_ref:-}" || -z "${remote_sha:-}" ]]; then
+    deny "Git supplied an unexpected ref update format."
+  fi
+
+  if [[ "${local_sha}" =~ ^0+$ ]]; then
+    deny "remote branch deletion is not permitted."
+  fi
+
+  if [[ ! "${remote_sha}" =~ ^0+$ ]] \
+      && ! git merge-base --is-ancestor "${remote_sha}" "${local_sha}"; then
+    deny "non-fast-forward updates are not permitted."
+  fi
+
+  case "${remote_ref}" in
+    refs/heads/main|refs/heads/master)
+      if [[ ! "${remote_sha}" =~ ^0+$ ]]; then
+        deny "update the protected branch through a reviewed pull request."
+      fi
+      ;;
+  esac
+done
+
+uv run python -m compileall -q src
+uv run python -m unittest discover -s tests
+

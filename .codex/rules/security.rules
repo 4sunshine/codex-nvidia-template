@@ -1,0 +1,30 @@
+# Project-level guardrails supplement Git hooks and remote branch protection.
+
+prefix_rule(
+    pattern = ["git", "push", ["--force", "-f"]],
+    decision = "forbidden",
+    justification = "Force pushes can discard reviewed remote history.",
+    match = ["git push --force origin feature/example", "git push -f origin feature/example"],
+)
+
+prefix_rule(
+    pattern = ["git", "reset", "--hard"],
+    decision = "forbidden",
+    justification = "Preserve local work and use a non-destructive recovery path.",
+    match = ["git reset --hard", "git reset --hard HEAD~1"],
+)
+
+prefix_rule(
+    pattern = ["git", "clean"],
+    decision = "forbidden",
+    justification = "git clean can destroy untracked user files.",
+    match = ["git clean -fd", "git clean -fdx"],
+)
+
+prefix_rule(
+    pattern = ["git", "push"],
+    decision = "prompt",
+    justification = "Confirm the destination, branch policy, and validation before pushing.",
+    match = ["git push origin feature/example"],
+)
+

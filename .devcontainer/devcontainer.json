@@ -1,0 +1,60 @@
+{
+  "name": "Codex NVIDIA development",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "..",
+    "args": {
+      "BASE_IMAGE": "pytorch/pytorch:2.7.1-cuda12.8-cudnn9-devel",
+      "NODE_IMAGE": "node:22.22.0-bookworm-slim",
+      "CODEX_VERSION": "0.145.0",
+      "UV_VERSION": "0.8.13"
+    }
+  },
+  "overrideCommand": false,
+  "containerUser": "root",
+  "remoteUser": "vscode",
+  "updateRemoteUserUID": true,
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
+  "workspaceFolder": "/workspace",
+  "runArgs": [
+    "--gpus=device=0",
+    "--shm-size=16g",
+    "--security-opt=no-new-privileges:true"
+  ],
+  "containerEnv": {
+    "TEMPLATE_DEVCONTAINER": "1",
+    "CUDA_VISIBLE_DEVICES": "0",
+    "HF_HOME": "/home/vscode/.cache/huggingface",
+    "HF_HUB_CACHE": "/home/vscode/.cache/huggingface/hub",
+    "HF_DATASETS_CACHE": "/home/vscode/.cache/huggingface/datasets",
+    "TORCH_HOME": "/home/vscode/.cache/torch",
+    "UV_CACHE_DIR": "/home/vscode/.cache/uv",
+    "PYTHONUNBUFFERED": "1"
+  },
+  "mounts": [
+    "source=codex-nvidia-template-codex-state,target=/home/vscode/.codex,type=volume",
+    "source=codex-nvidia-template-huggingface-cache,target=/home/vscode/.cache/huggingface,type=volume",
+    "source=codex-nvidia-template-torch-cache,target=/home/vscode/.cache/torch,type=volume",
+    "source=codex-nvidia-template-uv-cache,target=/home/vscode/.cache/uv,type=volume",
+    "source=codex-nvidia-template-venv,target=/workspace/.venv,type=volume",
+    "source=codex-nvidia-template-worktrees,target=/workspace/.worktrees,type=volume"
+  ],
+  "forwardPorts": [1455],
+  "portsAttributes": {
+    "1455": {
+      "label": "Codex login callback"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["openai.chatgpt"]
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "hostRequirements": {
+    "gpu": "optional",
+    "storage": "64gb"
+  },
+  "shutdownAction": "stopContainer"
+}
+

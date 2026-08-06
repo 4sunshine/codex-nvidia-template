@@ -1,0 +1,13 @@
+approval_policy = "on-request"
+sandbox_mode = "workspace-write"
+allow_login_shell = false
+check_for_update_on_startup = false
+
+[sandbox_workspace_write]
+writable_roots = ["/workspace/.worktrees"]
+network_access = true
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 3
+

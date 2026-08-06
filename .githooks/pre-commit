@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+blocked_files="$({
+  git diff --cached --name-only --diff-filter=ACMR \
+    | grep -E '(^|/)(\.env|auth\.json|credentials\.json|id_rsa|id_ed25519)$'
+} || true)"
+
+if [[ -n "${blocked_files}" ]]; then
+  echo "pre-commit: potentially sensitive files are staged:" >&2
+  echo "${blocked_files}" >&2
+  exit 1
+fi
+
+uv run python -m compileall -q src
+uv run python -m unittest discover -s tests
+
