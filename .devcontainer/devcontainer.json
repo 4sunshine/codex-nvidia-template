@@ -16,6 +16,7 @@
   "updateRemoteUserUID": true,
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "workspaceFolder": "/workspace",
+  "initializeCommand": "mkdir -p \"${localEnv:HOME}/ml-storage/datasets\" \"${localEnv:HOME}/ml-storage/models\" \"${localEnv:HOME}/ml-storage/outputs\" \"${localEnv:HOME}/ml-storage/runs\"",
   "runArgs": [
     "--gpus=device=0",
     "--shm-size=16g",
@@ -24,6 +25,10 @@
   "containerEnv": {
     "TEMPLATE_DEVCONTAINER": "1",
     "CUDA_VISIBLE_DEVICES": "0",
+    "DATASETS_DIR": "/mnt/ml/datasets",
+    "MODELS_DIR": "/mnt/ml/models",
+    "OUTPUTS_DIR": "/mnt/ml/outputs",
+    "RUNS_DIR": "/mnt/ml/runs",
     "HF_HOME": "/home/vscode/.cache/huggingface",
     "HF_HUB_CACHE": "/home/vscode/.cache/huggingface/hub",
     "HF_DATASETS_CACHE": "/home/vscode/.cache/huggingface/datasets",
@@ -37,7 +42,11 @@
     "source=codex-nvidia-template-torch-cache,target=/home/vscode/.cache/torch,type=volume",
     "source=codex-nvidia-template-uv-cache,target=/home/vscode/.cache/uv,type=volume",
     "source=codex-nvidia-template-venv,target=/workspace/.venv,type=volume",
-    "source=codex-nvidia-template-worktrees,target=/workspace/.worktrees,type=volume"
+    "source=codex-nvidia-template-worktrees,target=/workspace/.worktrees,type=volume",
+    "source=${localEnv:HOME}/ml-storage/datasets,target=/mnt/ml/datasets,type=bind",
+    "source=${localEnv:HOME}/ml-storage/models,target=/mnt/ml/models,type=bind",
+    "source=${localEnv:HOME}/ml-storage/outputs,target=/mnt/ml/outputs,type=bind",
+    "source=${localEnv:HOME}/ml-storage/runs,target=/mnt/ml/runs,type=bind"
   ],
   "forwardPorts": [1455],
   "portsAttributes": {
@@ -57,4 +66,3 @@
   },
   "shutdownAction": "stopContainer"
 }
-
