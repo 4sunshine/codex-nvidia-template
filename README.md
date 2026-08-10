@@ -31,10 +31,19 @@ rg -l 'template_project|template-project' pyproject.toml src tests \
       -e "s/template_project/${PYTHON_PACKAGE}/g" \
       -e "s/template-project/${PROJECT_SLUG}/g"
 
-# Named Docker volumes must be unique for every fork on the same host.
-sed -i "s/codex-nvidia-template/${PROJECT_SLUG}/g" \
+# Give the Dev Container a recognizable VS Code display name and ensure every
+# named Docker volume is unique for this fork.
+sed -i \
+  -e "s/Codex NVIDIA development/${PROJECT_SLUG} development/g" \
+  -e "s/codex-nvidia-template/${PROJECT_SLUG}/g" \
   .devcontainer/devcontainer.json
 ```
+
+Changing the top-level `name` in `devcontainer.json` is optional; it is a
+display label and does not control the repository, image, or volume names. It
+is recommended when several Dev Containers run on the same machine. Renaming
+the `source=codex-nvidia-template-*` volume prefixes is more important because
+unrelated forks must not share project-specific `.venv` or worktree volumes.
 
 Replace the template text in `PROJECT.md` and `README.md` with the new
 project's objective before inviting contributors.
