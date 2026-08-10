@@ -1,174 +1,113 @@
-# Codex NVIDIA Dev Container Template
+# NVIDIA ML Dev Container Template
 
-A reusable repository template for Python, PyTorch/CUDA, Hugging Face, and
-Codex development on a local or Remote SSH Docker host.
+Fork this repository to start a reproducible Python, PyTorch/CUDA, `uv`, and
+VS Code development environment. The source code is bind-mounted into the
+container; datasets, models, outputs, caches, and the virtual environment
+survive container rebuilds.
 
-## Included
+## 1. Fork and rename the repository
 
-- Parameterized PyTorch/CUDA base image
-- Pinned Node and Codex CLI installation independent of the base image
-- NVIDIA GPU selection with Docker and `CUDA_VISIBLE_DEVICES`
-- Persistent Codex, Hugging Face, Torch, uv, and virtual-environment volumes
-- Host-visible dataset, model, output, and experiment-run mounts
-- Non-root development with host/container UID alignment
-- Project-scoped Codex configuration and safety rules
-- Repository-local Git hooks
-- Minimal `uv` Python package and tests
-
-## Prerequisites
-
-Install Docker and VS Code with the Remote - SSH and Dev Containers
-extensions. An NVIDIA host also needs a compatible driver and NVIDIA Container
-Toolkit.
-
-On the Docker host, verify GPU passthrough:
+1. Open this repository on GitHub and select **Fork**.
+2. In the fork, open **Settings → General → Repository name**, enter your
+   project name, and select **Rename**.
+3. Clone the renamed fork over HTTPS:
 
 ```bash
-nvidia-smi
-docker run --rm --gpus all nvidia/cuda:12.4.1-base-ubuntu22.04 nvidia-smi
+git clone https://github.com/YOUR_ORG/my-ml-project.git
+cd my-ml-project
 ```
 
-Docker access is privileged host access. Follow the host administrator's
-rootless Docker or group-membership policy; do not make the Docker socket
-world-writable.
+Rename the starter Python package and its references. Use a hyphenated GitHub
+name and an underscore-separated Python import name:
 
-## Create a project from this template
+```bash
+PROJECT_SLUG=my-ml-project
+PYTHON_PACKAGE=my_ml_project
 
-After creating a new repository from this template:
+mv src/template_project "src/${PYTHON_PACKAGE}"
 
-1. Replace `template_project` in `pyproject.toml`, `src/`, and tests.
-2. Replace this README with the project's purpose and commands.
-3. Replace the generic `AGENTS.md` architecture section.
-4. Review `.codex/config.toml`, `.codex/rules/`, and `.githooks/`.
-5. Select a tested PyTorch image and GPU allocation.
-6. Change the named-volume prefix if multiple generated projects share a host.
+rg -l 'template_project|template-project' pyproject.toml src tests \
+  | xargs sed -i \
+      -e "s/template_project/${PYTHON_PACKAGE}/g" \
+      -e "s/template-project/${PROJECT_SLUG}/g"
 
-Generated repositories are independent; later template changes do not update
-them automatically.
+# Named Docker volumes must be unique for every fork on the same host.
+sed -i "s/codex-nvidia-template/${PROJECT_SLUG}/g" \
+  .devcontainer/devcontainer.json
+```
 
-## Select the base image
+Replace the template text in `PROJECT.md` and `README.md` with the new
+project's objective before inviting contributors.
 
-`.devcontainer/Dockerfile` accepts `BASE_IMAGE`, `NODE_IMAGE`,
-`CODEX_VERSION`, and `UV_VERSION` build arguments. The committed defaults are
-reviewed pins, not promises of the newest releases.
+## 2. Configure the development container
 
-Use a PyTorch `runtime` image for prebuilt packages or `devel` when compiling
-CUDA extensions. The final base must be Debian/Ubuntu compatible because the
-system-package step uses `apt`.
+The committed configuration works with one NVIDIA GPU and the pinned PyTorch
+2.10/CUDA 12.8 image. Review these files before the first build:
 
-## Select GPUs
+- `.devcontainer/Dockerfile`: base image fallback and operating-system tools.
+- `.devcontainer/devcontainer.json`: actual image build argument, GPUs, mounts,
+  environment variables, and VS Code settings.
+- `torch_constraints.txt`: Torch versions supplied by the base image.
 
-The default exposes host GPU 0:
+### Choose PyTorch and CUDA
+
+Set the same `BASE_IMAGE` in `Dockerfile` and in the `build.args` section of
+`devcontainer.json`. Then update all three versions in
+`torch_constraints.txt` to exactly match that image.
+
+The current working set is:
+
+```text
+pytorch/pytorch:2.10.0-cuda12.8-cudnn9-devel
+torch==2.10.0
+torchvision==0.25.0
+torchaudio==2.10.0
+```
+
+Use a `devel` image when compiling CUDA extensions. Add required Debian/Ubuntu
+libraries to the existing `apt-get install` list in `Dockerfile`. Keep project
+Python dependencies in `pyproject.toml`/`uv.lock`; do not install another Torch
+stack in the Dockerfile.
+
+### Select GPUs
+
+For host GPU 0 only, keep:
 
 ```jsonc
-"runArgs": ["--gpus=device=0"],
+"runArgs": [
+  "--gpus=device=0",
+  "--shm-size=16g",
+  "--security-opt=no-new-privileges:true"
+],
 "containerEnv": {
   "CUDA_VISIBLE_DEVICES": "0"
 }
 ```
 
-To expose host GPUs 2 and 3, use:
+To expose only host GPU 1, change `--gpus=device=0` to
+`--gpus=device=1`. It is presented as logical CUDA device 0 inside the
+container, so keep `CUDA_VISIBLE_DEVICES=0`.
+
+To expose host GPUs 0 and 1:
 
 ```jsonc
-"runArgs": ["--gpus", "\"device=2,3\""],
+"runArgs": [
+  "--gpus",
+  "device=0,1",
+  "--shm-size=16g",
+  "--security-opt=no-new-privileges:true"
+],
 "containerEnv": {
   "CUDA_VISIBLE_DEVICES": "0,1"
 }
 ```
 
-Docker exposes only the requested host devices. They are normally renumbered
-inside the container, so host devices 2 and 3 become CUDA devices 0 and 1.
-For all GPUs, use `"--gpus=all"` and omit `CUDA_VISIBLE_DEVICES` or select
-in-container indexes. For CPU-only hosts, remove the GPU argument and
-`CUDA_VISIBLE_DEVICES`, then select a CPU base image.
+Remove the GPU argument and `CUDA_VISIBLE_DEVICES` for CPU-only development,
+and select a CPU-compatible base image.
 
-On shared or scheduled infrastructure, request GPUs through the scheduler.
-`CUDA_VISIBLE_DEVICES` alone is not a resource or security boundary.
+### Choose persistent storage
 
-## Open locally or through Remote SSH
-
-For a remote machine:
-
-1. Connect using **Remote-SSH: Connect to Host...**.
-2. Open the remote repository folder.
-3. Run **Dev Containers: Reopen in Container**.
-4. Run **Dev Containers: Rebuild Container** after image changes.
-
-The repository, Docker data, named volumes, models, and datasets stay on the
-remote host. The container entrypoint initializes volume ownership and then
-drops privileges to `vscode`.
-
-## Authenticate
-
-Inside the container:
-
-```bash
-codex --version
-codex login
-
-hf auth login  # after adding a project dependency that provides the hf CLI
-```
-
-Codex state persists in a named volume mounted at `/home/vscode/.codex`.
-Repository policy remains in `/workspace/.codex`. Hugging Face data persists
-under `HF_HOME` in a private named volume.
-
-Never put tokens in the Dockerfile, build arguments, `devcontainer.json`, Git,
-or a committed environment file.
-
-## Develop
-
-```bash
-uv sync --frozen
-uv run python -m template_project
-uv run python -m unittest discover -s tests
-uv run python -m compileall src
-```
-
-Add dependencies with `uv add PACKAGE`; do not use `pip install` or
-`uv pip install` for project dependencies.
-
-## Validate the environment
-
-```bash
-id
-test -w /workspace
-test -w /home/vscode/.codex
-test -w "$HF_HOME"
-
-codex --version
-node --version
-
-uv run python - <<'PY'
-import os
-import torch
-
-print("torch:", torch.__version__)
-print("CUDA_VISIBLE_DEVICES:", os.environ.get("CUDA_VISIBLE_DEVICES"))
-print("CUDA available:", torch.cuda.is_available())
-print("visible device count:", torch.cuda.device_count())
-if torch.cuda.is_available():
-    print("device 0:", torch.cuda.get_device_name(0))
-PY
-```
-
-If the host can run `nvidia-smi` but PyTorch cannot see CUDA, verify Docker's
-`--gpus all` smoke test, NVIDIA Container Toolkit configuration, the image's
-CUDA variant, and host-driver compatibility.
-
-## Persistent data
-
-Named volumes survive container rebuilds and are intentionally not part of the
-repository. They are not backups. Keep unique trained weights in an explicitly
-backed-up host or object-storage location.
-
-Do not remove Docker volumes or run broad Docker cleanup commands without
-reviewing which projects and caches they affect.
-
-### Mounted ML storage
-
-Before container creation, `initializeCommand` creates this layout on the
-Docker host:
+By default, the host stores ML data under:
 
 ```text
 ~/ml-storage/
@@ -178,39 +117,79 @@ Docker host:
 └── runs/
 ```
 
-All four directories are writable bind mounts so downloads and training
-artifacts remain visible outside the container. They are available inside as
-`DATASETS_DIR`, `MODELS_DIR`, `OUTPUTS_DIR`, and `RUNS_DIR`. They are independent
-of the Hugging Face cache, which remains in its existing named volume under
-`/home/vscode/.cache/huggingface`.
+These appear inside the container as `/mnt/ml/datasets`, `/mnt/ml/models`,
+`/mnt/ml/outputs`, and `/mnt/ml/runs`. To isolate projects, replace
+`ml-storage` in `initializeCommand` and the four bind mounts with, for example,
+`ml-storage/my-ml-project`.
 
-The directories are created as the local or Remote SSH user, and
-`updateRemoteUserUID` aligns the container user with that host ownership. Do
-not add these external bind mounts to the entrypoint's `chown` loop. On a
-multi-user host, replace this single-user layout with administrator-managed
-group permissions and add the shared numeric GID through Docker.
+Never place credentials in `Dockerfile`, `devcontainer.json`, Git, or a
+committed `.env` file.
 
-### Agent worktrees
+## 3. Open the project in VS Code
 
-`/workspace/.worktrees` is runtime storage for isolated Git worktrees used by
-Codex or other agent workflows. It is ignored by Git, mounted from a persistent
-Docker volume, and included as a writable root in `.codex/config.toml`. Do not
-commit worktree contents or create a nested repository there manually.
+Install on the development machine:
 
-Each generated project must give the volume a unique name. Change this entry in
-`.devcontainer/devcontainer.json`:
+- Docker;
+- an NVIDIA driver and NVIDIA Container Toolkit for GPU development;
+- VS Code with the **Dev Containers** extension;
+- **Remote - SSH** as well when Docker runs on a remote GPU server.
 
-```jsonc
-"source=codex-nvidia-template-worktrees,target=/workspace/.worktrees,type=volume"
+For a local Docker host:
+
+```bash
+cd my-ml-project
+code .
 ```
 
-For example:
+Then open the VS Code Command Palette and run:
 
-```jsonc
-"source=my-project-worktrees,target=/workspace/.worktrees,type=volume"
+```text
+Dev Containers: Reopen in Container
 ```
 
-Sharing one worktree volume between unrelated repositories is unsafe because
-Git worktree metadata points back to a specific main checkout. If the project
-will not use Git worktrees or modifying subagents, remove the worktree mount,
-the `.codex/config.toml` writable-root entry, and the `.worktrees/` ignore rule.
+For a remote GPU server:
+
+1. Run **Remote-SSH: Connect to Host...**.
+2. Open the cloned repository on that server.
+3. Run **Dev Containers: Reopen in Container**.
+
+The first build downloads the base image and creates the persistent volumes.
+The post-create step runs `uv sync --frozen` and enables the repository Git
+hooks. After changing `Dockerfile`, `devcontainer.json`, or
+`torch_constraints.txt`, run **Dev Containers: Rebuild Container**.
+
+Verify the environment inside the VS Code terminal:
+
+```bash
+test -f /.dockerenv
+nvidia-smi
+
+python - <<'PY'
+import os
+import torch
+
+print("torch:", torch.__version__)
+print("torch location:", torch.__file__)
+print("CUDA available:", torch.cuda.is_available())
+print("visible GPUs:", torch.cuda.device_count())
+print("CUDA_VISIBLE_DEVICES:", os.environ.get("CUDA_VISIBLE_DEVICES"))
+if torch.cuda.is_available():
+    print("GPU 0:", torch.cuda.get_device_name(0))
+PY
+
+uv lock --check
+uv run python -m unittest discover -s tests
+```
+
+Normal project commands are:
+
+```bash
+uv add PACKAGE
+uv sync --frozen
+uv run python -m my_ml_project
+uv run python -m unittest discover -s tests
+```
+
+Use `codex login` inside the container if the project uses Codex. Codex,
+Hugging Face, Torch, `uv`, `.venv`, and agent-worktree state are stored in
+named volumes and survive container rebuilds.
