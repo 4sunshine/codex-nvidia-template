@@ -219,6 +219,76 @@ For a remote GPU server:
 2. Open the cloned repository on that server.
 3. Run **Dev Containers: Reopen in Container**.
 
+### Optional: allow agents to push `agent/*` branches
+
+Use a dedicated GitHub deploy key for each repository instead of giving an
+agent a personal SSH key. Generate it as your normal user on the trusted Docker
+host or workstation, never inside the repository:
+
+```bash
+AGENT_KEY="$HOME/.ssh/my-ml-project-agent"
+
+umask 077
+ssh-keygen -t ed25519 -a 100 \
+  -C "my-ml-project agent deploy key" \
+  -f "$AGENT_KEY"
+
+# Enter the passphrase once; the agent receives access through ssh-agent.
+ssh-add "$AGENT_KEY"
+cat "${AGENT_KEY}.pub"
+```
+
+In GitHub, open **Repository Settings → Deploy keys → Add deploy key**, paste
+only the `.pub` value, and select **Allow write access**. A deploy key grants
+access to one repository and cannot be reused for another repository. See
+[GitHub's deploy-key guide](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys).
+
+VS Code forwards the running `ssh-agent` socket into the Dev Container. Reopen
+the container after loading the key, then verify only its fingerprint inside:
+
+```bash
+test -S "$SSH_AUTH_SOCK"
+ssh-add -l
+```
+
+Use HTTPS for fetches and repository-scoped SSH over port 443 for pushes. This
+works on networks that block GitHub SSH port 22:
+
+```bash
+git remote set-url origin \
+  https://github.com/YOUR_ORG/my-ml-project.git
+
+git remote set-url --push origin \
+  ssh://git@ssh.github.com:443/YOUR_ORG/my-ml-project.git
+
+git fetch origin
+```
+
+Configure commit identity locally, create an `agent/*` branch, and open a pull
+request instead of pushing directly to `main`:
+
+```bash
+git config --local user.name "YOUR_AGENT_NAME"
+git config --local user.email "YOUR_AGENT_EMAIL"
+
+TASK_SLUG=add-evaluation
+git switch -c "agent/${TASK_SLUG}" origin/main
+
+git add -- PATHS_TO_COMMIT
+git diff --cached
+git commit -m "Add evaluation workflow"
+git push -u origin "agent/${TASK_SLUG}"
+```
+
+The SSH key authenticates Git pushes; it does not enforce the branch prefix or
+set commit identity. Protect `main` with a GitHub ruleset that requires pull
+requests and blocks force pushes/deletions. The repository's pre-push hook adds
+a local guard, but server-side protection is authoritative. Never copy the
+private key into the repository, `.env`, Docker image, volume, prompt, or log.
+Revoke the deploy key in GitHub immediately if the host or forwarded agent is
+compromised. GitHub documents the port-443 endpoint in its
+[SSH-over-HTTPS guide](https://docs.github.com/en/authentication/troubleshooting-ssh/using-ssh-over-the-https-port).
+
 The first build downloads the base image and creates the persistent volumes.
 The post-create step runs `uv sync --frozen` and enables the repository Git
 hooks. After changing `Dockerfile`, `devcontainer.json`, or
