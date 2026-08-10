@@ -222,8 +222,28 @@ For a remote GPU server:
 ### Optional: allow agents to push `agent/*` branches
 
 Use a dedicated GitHub deploy key for each repository instead of giving an
-agent a personal SSH key. Generate it as your normal user on the trusted Docker
-host or workstation, never inside the repository:
+agent a personal SSH key.
+
+The bundled helper is the easiest self-contained setup. Run it as the non-root
+Dev Container user from the repository root:
+
+```bash
+scripts/setup-agent-ssh YOUR_ORG/my-ml-project
+```
+
+The helper validates `origin`, generates an unencrypted repository-specific
+Ed25519 key under `~/.ssh`, displays only its public key, waits while you add it
+to GitHub, requires manual verification of GitHub's port-443 host fingerprint,
+and configures only this repository for HTTPS fetches and SSH-over-443 pushes.
+It refuses an unrelated remote and never overwrites an existing private key.
+
+The generated key is local to this container and is deliberately not stored in
+the repository or a shared project volume. Replacing the container may remove
+it; in that case, revoke the old GitHub deploy key and run the helper again.
+
+For a key that survives container replacement without storing private material
+inside the container, generate it as your normal user on the trusted Docker
+host or workstation and forward it with `ssh-agent`:
 
 ```bash
 AGENT_KEY="$HOME/.ssh/my-ml-project-agent"
@@ -263,6 +283,8 @@ git remote set-url --push origin \
 
 git fetch origin
 ```
+
+The helper performs the same repository-local remote setup automatically.
 
 Configure commit identity locally, create an `agent/*` branch, and open a pull
 request instead of pushing directly to `main`:
