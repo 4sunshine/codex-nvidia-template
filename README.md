@@ -122,6 +122,63 @@ These appear inside the container as `/mnt/ml/datasets`, `/mnt/ml/models`,
 `ml-storage` in `initializeCommand` and the four bind mounts with, for example,
 `ml-storage/my-ml-project`.
 
+### Export and reuse trained models
+
+`models` and `outputs` are host bind mounts, so files written there already
+belong to the host user and survive container rebuilds. Do not use `docker cp`.
+Train into `$OUTPUTS_DIR`, then promote the selected checkpoint inside the
+container:
+
+```bash
+MODEL_NAME=my-model-v1.pth
+
+install -m 0644 \
+  "$OUTPUTS_DIR/my-run/checkpoint_best.pth" \
+  "$MODELS_DIR/$MODEL_NAME"
+
+sha256sum "$MODELS_DIR/$MODEL_NAME"
+```
+
+On the Docker host, the same file is immediately available at:
+
+```bash
+# Use "$HOME/ml-storage" when the optional per-project directory was not set.
+HOST_ML_ROOT="$HOME/ml-storage/my-ml-project"
+
+ls -lh "$HOST_ML_ROOT/models"
+sha256sum "$HOST_ML_ROOT/models/my-model-v1.pth"
+```
+
+When Docker runs on a remote GPU server, copy the model to a workstation from
+a local terminal:
+
+```bash
+mkdir -p ./models
+scp GPU_HOST:~/ml-storage/my-ml-project/models/my-model-v1.pth ./models/
+```
+
+Use the model outside the development container only with a compatible Python,
+framework, and CUDA environment:
+
+```bash
+MODEL_PATH="$HOST_ML_ROOT/models/my-model-v1.pth"
+uv run python your_inference_script.py --checkpoint "$MODEL_PATH"
+```
+
+The safer reproducible option is another container with the model directory
+mounted read-only:
+
+```bash
+docker run --rm --gpus device=0 \
+  --mount "type=bind,src=$HOST_ML_ROOT/models,dst=/models,readonly" \
+  your-inference-image \
+  python /app/infer.py --checkpoint /models/my-model-v1.pth
+```
+
+Do not run training as root, commit model files to Git, or load untrusted
+pickled checkpoints. Record the model hash and the code/environment version
+used to produce it.
+
 Never place credentials in `Dockerfile`, `devcontainer.json`, Git, or a
 committed `.env` file.
 
