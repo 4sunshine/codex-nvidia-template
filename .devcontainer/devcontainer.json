@@ -4,7 +4,7 @@
     "dockerfile": "Dockerfile",
     "context": "..",
     "args": {
-      "BASE_IMAGE": "pytorch/pytorch:2.7.1-cuda12.8-cudnn9-devel",
+      "BASE_IMAGE": "pytorch/pytorch:2.10.0-cuda12.8-cudnn9-devel",
       "NODE_IMAGE": "node:22.22.0-bookworm-slim",
       "CODEX_VERSION": "0.145.0",
       "UV_VERSION": "0.8.13"
