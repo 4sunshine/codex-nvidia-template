@@ -8,17 +8,35 @@ from pathlib import Path
 
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "setup-agent-ssh"
+GIT_REPOSITORY_ENVIRONMENT = (
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_COMMON_DIR",
+    "GIT_DIR",
+    "GIT_INDEX_FILE",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_PREFIX",
+    "GIT_QUARANTINE_PATH",
+    "GIT_WORK_TREE",
+)
 
 
 class SetupAgentSshTest(unittest.TestCase):
     def setUp(self) -> None:
+        self.git_environment = os.environ.copy()
+        for variable in GIT_REPOSITORY_ENVIRONMENT:
+            self.git_environment.pop(variable, None)
+
         self.temporary = tempfile.TemporaryDirectory()
         self.root = Path(self.temporary.name)
         self.repository = self.root / "repository"
         self.ssh_dir = self.root / "ssh"
         self.bin_dir = self.root / "bin"
         self.bin_dir.mkdir()
-        subprocess.run(["git", "init", "-q", str(self.repository)], check=True)
+        subprocess.run(
+            ["git", "init", "-q", str(self.repository)],
+            check=True,
+            env=self.git_environment,
+        )
         subprocess.run(
             [
                 "git",
@@ -30,6 +48,7 @@ class SetupAgentSshTest(unittest.TestCase):
                 "https://github.com/example/project.git",
             ],
             check=True,
+            env=self.git_environment,
         )
         self.host_key = self.root / "host-key"
         subprocess.run(
@@ -67,7 +86,7 @@ class SetupAgentSshTest(unittest.TestCase):
         ssh.chmod(0o755)
 
     def _run(self, answers: str, repository: str = "example/project") -> subprocess.CompletedProcess[str]:
-        environment = os.environ.copy()
+        environment = self.git_environment.copy()
         environment.update(
             {
                 "AGENT_SSH_DIR": str(self.ssh_dir),
@@ -104,18 +123,21 @@ class SetupAgentSshTest(unittest.TestCase):
             ["git", "-C", str(self.repository), "remote", "get-url", "origin"],
             check=True,
             capture_output=True,
+            env=self.git_environment,
             text=True,
         ).stdout.strip()
         push = subprocess.run(
             ["git", "-C", str(self.repository), "remote", "get-url", "--push", "origin"],
             check=True,
             capture_output=True,
+            env=self.git_environment,
             text=True,
         ).stdout.strip()
         command = subprocess.run(
             ["git", "-C", str(self.repository), "config", "--local", "core.sshCommand"],
             check=True,
             capture_output=True,
+            env=self.git_environment,
             text=True,
         ).stdout.strip()
         self.assertEqual(fetch, "https://github.com/example/project.git")
