@@ -191,7 +191,101 @@ used to produce it.
 Never place credentials in `Dockerfile`, `devcontainer.json`, Git, or a
 committed `.env` file.
 
-## 3. Open the project in VS Code
+## 3. Start the container without VS Code
+
+Run this single block from the repository root. It builds the committed
+`.devcontainer/Dockerfile`, mounts the project and persistent state, and starts
+a background container with GPU 0:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+readonly project="${PROJECT_SLUG:-$(basename "$PWD")}"
+readonly image="${project}-dev:local"
+readonly container="${project}-codex"
+
+[[ "${project}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || {
+  echo "Set PROJECT_SLUG to a Docker-safe name" >&2
+  exit 2
+}
+
+docker build \
+  --file .devcontainer/Dockerfile \
+  --build-arg "USER_UID=$(id -u)" \
+  --build-arg "USER_GID=$(id -g)" \
+  --tag "${image}" \
+  .
+
+docker run --detach --rm \
+  --name "${container}" \
+  --gpus device=0 \
+  --shm-size 16g \
+  --security-opt no-new-privileges:true \
+  --publish 127.0.0.1:1455:1455 \
+  --workdir /workspace \
+  --env TEMPLATE_DEVCONTAINER=1 \
+  --env CUDA_VISIBLE_DEVICES=0 \
+  --mount "type=bind,src=${PWD},dst=/workspace" \
+  --mount "source=${project}-codex,target=/home/vscode/.codex" \
+  --mount "source=${project}-hf,target=/home/vscode/.cache/huggingface" \
+  --mount "source=${project}-torch,target=/home/vscode/.cache/torch" \
+  --mount "source=${project}-uv,target=/home/vscode/.cache/uv" \
+  --mount "source=${project}-venv,target=/workspace/.venv" \
+  --mount "source=${project}-worktrees,target=/workspace/.worktrees" \
+  "${image}"
+```
+
+The image automatically uses `.devcontainer/entrypoint.sh`: it initializes
+fresh volume ownership and then runs the Dockerfile's default `sleep infinity`
+as the unprivileged `vscode` user with `no-new-privileges`. Do not add
+`--user vscode` to `docker run`, because the entrypoint must start as container
+root before it drops privileges.
+
+Open a shell or start Codex only when needed:
+
+```bash
+CONTAINER_NAME="${PROJECT_SLUG:-$(basename "$PWD")}-codex"
+
+docker exec --interactive --tty \
+  --user vscode --workdir /workspace \
+  --env HOME=/home/vscode --env USER=vscode --env LOGNAME=vscode \
+  "${CONTAINER_NAME}" bash
+
+docker exec --interactive --tty \
+  --user vscode --workdir /workspace \
+  --env HOME=/home/vscode --env USER=vscode --env LOGNAME=vscode \
+  "${CONTAINER_NAME}" codex
+```
+
+To use a rootless Docker daemon too, follow Docker's
+[rootless-mode guide](https://docs.docker.com/engine/security/rootless/) and
+NVIDIA's [rootless GPU configuration](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#rootless-mode).
+Rootless UID mapping is host-specific; confirm that Codex can write to the
+bind-mounted repository.
+
+While the container is running, install a temporary operating-system package
+from a host terminal:
+
+```bash
+CONTAINER_NAME="${PROJECT_SLUG:-$(basename "$PWD")}-codex"
+docker exec --user root "${CONTAINER_NAME}" bash -lc \
+  'apt-get update && apt-get install -y --no-install-recommends graphviz && rm -rf /var/lib/apt/lists/*'
+```
+
+Set `PROJECT_SLUG` in the second terminal if the repository directory name was
+not used. Container root can modify writable bind mounts, so use it only for a
+narrow command. Packages installed this way disappear with the container; add
+required packages to `.devcontainer/Dockerfile` and rebuild for reproducibility.
+
+Stop and remove the container while retaining its named volumes:
+
+```bash
+CONTAINER_NAME="${PROJECT_SLUG:-$(basename "$PWD")}-codex"
+docker stop "${CONTAINER_NAME}"
+```
+
+## 4. Open the project in VS Code
 
 Install on the development machine:
 
