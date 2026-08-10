@@ -1,0 +1,161 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fail() {
+  echo "setup-agent-ssh: $*" >&2
+  exit 1
+}
+
+confirm() {
+  local prompt="$1"
+  local answer
+  read -r -p "${prompt} [y/N] " answer
+  [[ "${answer}" == "y" || "${answer}" == "Y" ]]
+}
+
+usage() {
+  echo "Usage: scripts/setup-agent-ssh OWNER/REPOSITORY" >&2
+  exit 2
+}
+
+[[ "$#" -eq 1 ]] || usage
+readonly repository="$1"
+[[ "${repository}" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] \
+  || fail "repository must have the form OWNER/REPOSITORY"
+
+if [[ "${TEMPLATE_DEVCONTAINER:-}" != "1" || "$(id -u)" -eq 0 ]]; then
+  fail "run as the non-root user inside this repository's Dev Container"
+fi
+
+readonly workspace="${AGENT_SSH_WORKSPACE:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
+[[ -n "${workspace}" ]] || fail "current directory is not a Git checkout"
+[[ "$(pwd -P)" == "$(realpath "${workspace}")" ]] \
+  || fail "run from the repository root at ${workspace}"
+[[ "$(git -C "${workspace}" rev-parse --show-toplevel 2>/dev/null)" == "${workspace}" ]] \
+  || fail "${workspace} is not the expected Git checkout"
+
+readonly ssh_dir="${AGENT_SSH_DIR:-${HOME}/.ssh}"
+[[ "${ssh_dir}" != *[[:space:]]* ]] \
+  || fail "SSH directory paths containing whitespace are not supported"
+readonly key_slug="${repository//\//_}"
+readonly private_key="${ssh_dir}/id_ed25519_agent_${key_slug}"
+readonly public_key="${private_key}.pub"
+readonly known_hosts="${ssh_dir}/known_hosts_agent_${key_slug}"
+readonly github_host="${AGENT_SSH_GITHUB_HOST:-ssh.github.com}"
+readonly expected_fetch="https://github.com/${repository}.git"
+readonly expected_push="ssh://git@${github_host}:443/${repository}.git"
+
+identifies_repository() {
+  local url="$1"
+  case "${url}" in
+    "https://github.com/${repository}"|"https://github.com/${repository}.git"|\
+    "git@github.com:${repository}.git"|"ssh://git@github.com/${repository}.git"|\
+    "${expected_push}")
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+readonly current_fetch="$(git -C "${workspace}" remote get-url origin 2>/dev/null || true)"
+readonly current_push="$(git -C "${workspace}" remote get-url --push origin 2>/dev/null || true)"
+identifies_repository "${current_fetch}" \
+  || fail "origin fetch URL does not identify ${repository}; refusing SSH changes"
+identifies_repository "${current_push}" \
+  || fail "origin push URL does not identify ${repository}; refusing SSH changes"
+
+install -d -m 0700 "${ssh_dir}"
+touch "${known_hosts}"
+chmod 0600 "${known_hosts}"
+
+if [[ -e "${private_key}" ]]; then
+  [[ -f "${private_key}" ]] \
+    || fail "${private_key} exists but is not a regular file"
+  chmod 0600 "${private_key}"
+  if [[ ! -f "${public_key}" ]]; then
+    ssh-keygen -y -f "${private_key}" >"${public_key}"
+  fi
+  echo "Using the existing repository deploy key; it was not overwritten."
+else
+  ssh-keygen -q -t ed25519 -N '' \
+    -C "${repository} agent deploy key" \
+    -f "${private_key}"
+  chmod 0600 "${private_key}"
+  echo "Generated an unencrypted, repository-scoped agent deploy key."
+fi
+chmod 0644 "${public_key}"
+
+echo
+echo "Deploy public key for ${repository} (safe to copy):"
+cat "${public_key}"
+echo
+echo "In GitHub, add it under Repository Settings > Deploy keys"
+echo "and select Allow write access. Never copy the private key."
+confirm "Has this public key been added as a writable deploy key?" \
+  || fail "deploy-key setup was not confirmed"
+
+readonly scan_temp="$(mktemp /tmp/agent-known-hosts.XXXXXX)"
+trap 'rm -f "${scan_temp}"' EXIT
+
+echo
+echo "Retrieving a candidate Ed25519 host key for ${github_host}:443..."
+ssh-keyscan -p 443 -t ed25519 "${github_host}" >"${scan_temp}" 2>/dev/null \
+  || fail "could not retrieve the candidate GitHub host key"
+if ! awk -v expected="[${github_host}]:443" '
+  $1 != expected { exit 1 }
+  END { if (NR == 0) exit 1 }
+' "${scan_temp}"; then
+  fail "retrieved host keys were not exclusively for [${github_host}]:443"
+fi
+ssh-keygen -lf "${scan_temp}"
+echo "Compare the fingerprint with GitHub's published SSH fingerprints:"
+echo "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints"
+confirm "Does the displayed fingerprint match GitHub's published value?" \
+  || fail "host key was not approved; trusted host keys were left unchanged"
+
+while IFS= read -r candidate; do
+  [[ -n "${candidate}" ]] || continue
+  grep -Fqx "${candidate}" "${known_hosts}" \
+    || printf '%s\n' "${candidate}" >>"${known_hosts}"
+done <"${scan_temp}"
+chmod 0600 "${known_hosts}"
+
+if [[ "${current_fetch}" != "${expected_fetch}" || "${current_push}" != "${expected_push}" ]]; then
+  echo
+  echo "Fetch URL: ${expected_fetch}"
+  echo "Push URL:  ${expected_push}"
+  confirm "Apply these URLs only to this repository's origin?" \
+    || fail "repository remote change was declined"
+  git -C "${workspace}" remote set-url origin "${expected_fetch}"
+  git -C "${workspace}" remote set-url --push origin "${expected_push}"
+else
+  echo "Repository fetch and push URLs are already configured."
+fi
+
+readonly ssh_command="ssh -i ${private_key} -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${known_hosts}"
+git -C "${workspace}" config --local core.sshCommand "${ssh_command}"
+
+echo
+echo "Testing repository-scoped SSH authentication on port 443..."
+set +e
+ssh_output="$(
+  ssh -i "${private_key}" \
+    -o IdentitiesOnly=yes \
+    -o StrictHostKeyChecking=yes \
+    -o "UserKnownHostsFile=${known_hosts}" \
+    -T -p 443 "git@${github_host}" 2>&1
+)"
+ssh_status=$?
+set -e
+printf '%s\n' "${ssh_output}"
+if [[ "${ssh_status}" -ne 0 && "${ssh_status}" -ne 1 ]]; then
+  fail "SSH transport/authentication failed"
+fi
+grep -qi "successfully authenticated" <<<"${ssh_output}" \
+  || fail "GitHub did not confirm successful authentication"
+
+echo
+echo "Agent SSH setup complete. Private key: ${private_key}"
+echo "Create agent/TASK branches and integrate them through reviewed pull requests."
