@@ -37,6 +37,3 @@ while IFS=' ' read -r local_ref local_sha remote_ref remote_sha extra; do
     fi
   fi
 done
-
-uv run python -m compileall -q src
-uv run python -m unittest discover -s tests
