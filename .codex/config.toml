@@ -1,4 +1,4 @@
-approval_policy = "on-request"
+approval_policy = "never"
 sandbox_mode = "workspace-write"
 allow_login_shell = false
 check_for_update_on_startup = false
@@ -10,4 +10,3 @@ network_access = true
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 3
-

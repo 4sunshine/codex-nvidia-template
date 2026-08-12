@@ -1,10 +1,25 @@
 # Project-level guardrails supplement Git hooks and remote branch protection.
 
 prefix_rule(
-    pattern = ["git", "push", ["--force", "-f"]],
+    pattern = [
+        "git",
+        "push",
+        [
+            "--force",
+            "-f",
+            "--force-with-lease",
+            "--mirror",
+            "--delete",
+            "-d",
+        ],
+    ],
     decision = "forbidden",
-    justification = "Force pushes can discard reviewed remote history.",
-    match = ["git push --force origin feature/example", "git push -f origin feature/example"],
+    justification = "History rewriting and remote branch deletion remain prohibited.",
+    match = [
+        "git push --force origin agent/example",
+        "git push --force-with-lease origin agent/example",
+        "git push --delete origin agent/example",
+    ],
 )
 
 prefix_rule(
@@ -22,9 +37,23 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern = ["git", "push"],
-    decision = "prompt",
-    justification = "Confirm the destination, branch policy, and validation before pushing.",
-    match = ["git push origin feature/example"],
+    pattern = [
+        "git",
+        [
+            "add",
+            "commit",
+            "fetch",
+            "pull",
+            "push",
+        ],
+    ],
+    decision = "allow",
+    justification = "Normal Git development and publication are autonomous on agent branches.",
+    match = [
+        "git add README.md",
+        "git commit -m update",
+        "git fetch origin",
+        "git pull --ff-only origin agent/example",
+        "git push -u origin agent/example",
+    ],
 )
-

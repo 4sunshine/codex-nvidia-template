@@ -18,13 +18,13 @@
   "workspaceFolder": "/workspace",
   "initializeCommand": "mkdir -p \"${localEnv:HOME}/ml-storage/datasets\" \"${localEnv:HOME}/ml-storage/models\" \"${localEnv:HOME}/ml-storage/outputs\" \"${localEnv:HOME}/ml-storage/runs\"",
   "runArgs": [
-    "--gpus=device=0",
+    "--gpus=\"device=0,1\"",
     "--shm-size=16g",
     "--security-opt=no-new-privileges:true"
   ],
   "containerEnv": {
     "TEMPLATE_DEVCONTAINER": "1",
-    "CUDA_VISIBLE_DEVICES": "0",
+    "CUDA_VISIBLE_DEVICES": "0,1",
     "DATASETS_DIR": "/mnt/ml/datasets",
     "MODELS_DIR": "/mnt/ml/models",
     "OUTPUTS_DIR": "/mnt/ml/outputs",
@@ -61,7 +61,6 @@
   },
   "postCreateCommand": "bash .devcontainer/post-create.sh",
   "hostRequirements": {
-    "gpu": "optional",
     "storage": "64gb"
   },
   "shutdownAction": "stopContainer"

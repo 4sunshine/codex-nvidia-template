@@ -9,7 +9,4 @@ fi
 cd /workspace
 
 git config --local core.hooksPath .githooks
-uv sync --frozen
-
 echo "Dependencies and repository-local Git hooks are ready."
-
