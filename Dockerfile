@@ -49,16 +49,6 @@ RUN apt-get update \
     && if ! getent passwd "${USERNAME}" >/dev/null; then useradd --uid "${USER_UID}" --gid "${USERNAME}" --create-home --shell /bin/bash "${USERNAME}"; fi \
     && rm -rf /var/lib/apt/lists/*
 
-# Install locked analysis dependencies into the image's ordinary Python so
-# direct python3 commands work without an activation step or runtime downloads.
-# --inexact preserves unrelated packages already provided by the base image.
-COPY pyproject.toml uv.lock /opt/amrvac-analysis/
-RUN UV_PROJECT_ENVIRONMENT="$(python3 -c 'import sys; print(sys.prefix)')" \
-        uv sync --project /opt/amrvac-analysis --locked --inexact \
-        --no-dev --no-install-project --no-python-downloads \
-        --python "$(command -v python3)" \
-    && python3 -c 'import astropy, numpy, torch; assert astropy.__version__ == "8.0.1"; assert torch.from_numpy(numpy.zeros(1)).numpy().shape == (1,)'
-
 # Fail the build if the CUDA-enabled PyTorch stack supplied by the base image
 # drifts after analysis dependencies are installed.
 COPY torch_constraints.txt /tmp/torch_constraints.txt
