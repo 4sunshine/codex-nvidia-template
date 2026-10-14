@@ -1,9 +1,9 @@
 {
   "name": "${localWorkspaceFolderBasename} development",
+
   "build": {
     "dockerfile": "../Dockerfile",
     "context": "..",
-    "target": "devcontainer",
     "args": {
       "BASE_IMAGE": "pytorch/pytorch:2.13.0-cuda12.6-cudnn9-devel",
       "NODE_IMAGE": "node:22.22.0-bookworm-slim",
@@ -11,58 +11,89 @@
       "UV_VERSION": "0.12.19"
     }
   },
+
   "overrideCommand": false,
   "containerUser": "root",
   "remoteUser": "vscode",
   "updateRemoteUserUID": true,
+
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=cached",
   "workspaceFolder": "/workspace",
-  "initializeCommand": "mkdir -p \"${localEnv:HOME}/ml-storage/datasets\" \"${localEnv:HOME}/ml-storage/models\" \"${localEnv:HOME}/ml-storage/outputs\" \"${localEnv:HOME}/ml-storage/runs\"",
+
+  "initializeCommand": "mkdir -p \"${localEnv:HOME}/data\" \"${localEnv:HOME}/ml-storage/datasets\" \"${localEnv:HOME}/ml-storage/models\" \"${localEnv:HOME}/ml-storage/outputs\" \"${localEnv:HOME}/ml-storage/runs\"",
+
   "runArgs": [
     "--gpus=\"device=0\"",
     "--shm-size=4g",
     "--security-opt=no-new-privileges:true"
   ],
+
   "containerEnv": {
     "TEMPLATE_DEVCONTAINER": "1",
-    "CUDA_VISIBLE_DEVICES": "0,1",
+
+    "CUDA_VISIBLE_DEVICES": "0",
+
     "DATASETS_DIR": "/mnt/ml/datasets",
     "MODELS_DIR": "/mnt/ml/models",
     "OUTPUTS_DIR": "/mnt/ml/outputs",
     "RUNS_DIR": "/mnt/ml/runs",
+
     "HF_HOME": "/home/vscode/.cache/huggingface",
     "HF_HUB_CACHE": "/home/vscode/.cache/huggingface/hub",
     "HF_DATASETS_CACHE": "/home/vscode/.cache/huggingface/datasets",
+
     "TORCH_HOME": "/home/vscode/.cache/torch",
     "UV_CACHE_DIR": "/home/vscode/.cache/uv",
+
     "PYTHONUNBUFFERED": "1"
   },
+
   "mounts": [
     "source=devcontainer-${devcontainerId}-codex-state,target=/home/vscode/.codex,type=volume",
+
+    "source=devcontainer-${devcontainerId}-hf-cache,target=/home/vscode/.cache/huggingface,type=volume",
     "source=devcontainer-${devcontainerId}-torch-cache,target=/home/vscode/.cache/torch,type=volume",
     "source=devcontainer-${devcontainerId}-uv-cache,target=/home/vscode/.cache/uv,type=volume",
+
     "source=devcontainer-${devcontainerId}-venv,target=/workspace/.venv,type=volume",
     "source=devcontainer-${devcontainerId}-worktrees,target=/workspace/.worktrees,type=volume",
-    "source=${localEnv:HOME}/data,target=/runs,type=bind"
+
+    "source=${localEnv:HOME}/data,target=/runs,type=bind",
+
+    "source=${localEnv:HOME}/ml-storage/datasets,target=/mnt/ml/datasets,type=bind",
+    "source=${localEnv:HOME}/ml-storage/models,target=/mnt/ml/models,type=bind",
+    "source=${localEnv:HOME}/ml-storage/outputs,target=/mnt/ml/outputs,type=bind",
+    "source=${localEnv:HOME}/ml-storage/runs,target=/mnt/ml/runs,type=bind"
   ],
-  "forwardPorts": [1455, 11111],
+
+  "forwardPorts": [
+    1455,
+    11111
+  ],
+
   "portsAttributes": {
+    "1455": {
+      "label": "Codex login callback"
+    },
     "11111": {
       "label": "ParaView server",
       "onAutoForward": "notify"
-    },
-    "1455": {
-      "label": "Codex login callback"
     }
   },
+
   "customizations": {
     "vscode": {
-      "extensions": ["openai.chatgpt"]
+      "extensions": [
+        "openai.chatgpt"
+      ]
     }
   },
+
   "postCreateCommand": "bash .devcontainer/post-create.sh",
+
   "hostRequirements": {
     "storage": "64gb"
   },
+
   "shutdownAction": "stopContainer"
 }
