@@ -1,13 +1,14 @@
 {
-  "name": "Codex NVIDIA development",
+  "name": "${localWorkspaceFolderBasename} development",
   "build": {
-    "dockerfile": "Dockerfile",
+    "dockerfile": "../Dockerfile",
     "context": "..",
+    "target": "devcontainer",
     "args": {
-      "BASE_IMAGE": "pytorch/pytorch:2.10.0-cuda12.8-cudnn9-devel",
+      "BASE_IMAGE": "pytorch/pytorch:2.13.0-cuda12.6-cudnn9-devel",
       "NODE_IMAGE": "node:22.22.0-bookworm-slim",
-      "CODEX_VERSION": "0.145.0",
-      "UV_VERSION": "0.8.13"
+      "CODEX_VERSION": "latest",
+      "UV_VERSION": "0.12.19"
     }
   },
   "overrideCommand": false,
@@ -18,8 +19,8 @@
   "workspaceFolder": "/workspace",
   "initializeCommand": "mkdir -p \"${localEnv:HOME}/ml-storage/datasets\" \"${localEnv:HOME}/ml-storage/models\" \"${localEnv:HOME}/ml-storage/outputs\" \"${localEnv:HOME}/ml-storage/runs\"",
   "runArgs": [
-    "--gpus=\"device=0,1\"",
-    "--shm-size=16g",
+    "--gpus=\"device=0\"",
+    "--shm-size=4g",
     "--security-opt=no-new-privileges:true"
   ],
   "containerEnv": {
@@ -37,19 +38,19 @@
     "PYTHONUNBUFFERED": "1"
   },
   "mounts": [
-    "source=codex-nvidia-template-codex-state,target=/home/vscode/.codex,type=volume",
-    "source=codex-nvidia-template-huggingface-cache,target=/home/vscode/.cache/huggingface,type=volume",
-    "source=codex-nvidia-template-torch-cache,target=/home/vscode/.cache/torch,type=volume",
-    "source=codex-nvidia-template-uv-cache,target=/home/vscode/.cache/uv,type=volume",
-    "source=codex-nvidia-template-venv,target=/workspace/.venv,type=volume",
-    "source=codex-nvidia-template-worktrees,target=/workspace/.worktrees,type=volume",
-    "source=${localEnv:HOME}/ml-storage/datasets,target=/mnt/ml/datasets,type=bind",
-    "source=${localEnv:HOME}/ml-storage/models,target=/mnt/ml/models,type=bind",
-    "source=${localEnv:HOME}/ml-storage/outputs,target=/mnt/ml/outputs,type=bind",
-    "source=${localEnv:HOME}/ml-storage/runs,target=/mnt/ml/runs,type=bind"
+    "source=devcontainer-${devcontainerId}-codex-state,target=/home/vscode/.codex,type=volume",
+    "source=devcontainer-${devcontainerId}-torch-cache,target=/home/vscode/.cache/torch,type=volume",
+    "source=devcontainer-${devcontainerId}-uv-cache,target=/home/vscode/.cache/uv,type=volume",
+    "source=devcontainer-${devcontainerId}-venv,target=/workspace/.venv,type=volume",
+    "source=devcontainer-${devcontainerId}-worktrees,target=/workspace/.worktrees,type=volume",
+    "source=${localEnv:HOME}/data,target=/runs,type=bind"
   ],
-  "forwardPorts": [1455],
+  "forwardPorts": [1455, 11111],
   "portsAttributes": {
+    "11111": {
+      "label": "ParaView server",
+      "onAutoForward": "notify"
+    },
     "1455": {
       "label": "Codex login callback"
     }
